@@ -429,6 +429,7 @@ func (c *Commands) SetUpInstance(ctx context.Context, setup *InstanceSetup) (str
 				setup.SMTPConfiguration.SMTP.User,
 				[]byte(setup.SMTPConfiguration.SMTP.Password),
 				setup.SMTPConfiguration.Tls,
+				setup.SMTPConfiguration.SMTP.ProviderType,
 			),
 		)
 	}

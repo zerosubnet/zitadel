@@ -12,18 +12,22 @@ import (
 	"github.com/zitadel/zitadel/internal/domain"
 	caos_errs "github.com/zitadel/zitadel/internal/errors"
 	"github.com/zitadel/zitadel/internal/eventstore"
+	"github.com/zitadel/zitadel/internal/id"
+	id_mock "github.com/zitadel/zitadel/internal/id/mock"
 	"github.com/zitadel/zitadel/internal/notification/channels/smtp"
 	"github.com/zitadel/zitadel/internal/repository/instance"
 )
 
 func TestCommandSide_AddSMTPConfig(t *testing.T) {
 	type fields struct {
-		eventstore *eventstore.Eventstore
-		alg        crypto.EncryptionAlgorithm
+		eventstore  *eventstore.Eventstore
+		idGenerator id.Generator
+		alg         crypto.EncryptionAlgorithm
 	}
 	type args struct {
-		ctx  context.Context
-		smtp *smtp.Config
+		ctx        context.Context
+		instanceID string
+		smtp       *smtp.Config
 	}
 	type res struct {
 		want *domain.ObjectDetails
@@ -51,74 +55,26 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 						),
 					),
 				),
+				idGenerator: id_mock.NewIDGeneratorExpectIDs(t, "configid"),
+				alg:         crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
 			},
 			args: args{
 				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
 				smtp: &smtp.Config{
-					Tls:      true,
-					From:     "from@domain.ch",
-					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host:     "host:587",
-						User:     "user",
-						Password: "password",
+						Host:         "host:587",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 1,
 					},
+					Tls:            true,
+					From:           "from@domain.ch",
+					FromName:       "name",
+					ReplyToAddress: "replyto@domain.ch",
 				},
 			},
 			res: res{
 				err: caos_errs.IsErrorInvalidArgument,
-			},
-		},
-		{
-			name: "smtp config, error already exists",
-			fields: fields{
-				eventstore: eventstoreExpect(
-					t,
-					expectFilter(
-						eventFromEventPusher(
-							instance.NewDomainAddedEvent(context.Background(),
-								&instance.NewAggregate("INSTANCE").Aggregate,
-								"domain.ch",
-								false,
-							),
-						),
-						eventFromEventPusher(
-							instance.NewDomainPolicyAddedEvent(context.Background(),
-								&instance.NewAggregate("INSTANCE").Aggregate,
-								true, true, false,
-							),
-						),
-						eventFromEventPusher(
-							instance.NewSMTPConfigAddedEvent(context.Background(),
-								&instance.NewAggregate("INSTANCE").Aggregate,
-								true,
-								"from@domain.ch",
-								"name",
-								"",
-								"host:587",
-								"user",
-								&crypto.CryptoValue{},
-							),
-						),
-					),
-				),
-			},
-			args: args{
-				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
-				smtp: &smtp.Config{
-					Tls:            true,
-					From:           "from@domain.ch",
-					FromName:       "name",
-					ReplyToAddress: "",
-					SMTP: smtp.SMTP{
-						Host:     "host:587",
-						User:     "user",
-						Password: "password",
-					},
-				},
-			},
-			res: res{
-				err: caos_errs.IsErrorAlreadyExists,
 			},
 		},
 		{
@@ -145,6 +101,7 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 						instance.NewSMTPConfigAddedEvent(
 							context.Background(),
 							&instance.NewAggregate("INSTANCE").Aggregate,
+							"configid",
 							true,
 							"from@domain.ch",
 							"name",
@@ -157,10 +114,12 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 								KeyID:      "id",
 								Crypted:    []byte("password"),
 							},
+							7,
 						),
 					),
 				),
-				alg: crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
+				idGenerator: id_mock.NewIDGeneratorExpectIDs(t, "configid"),
+				alg:         crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
 			},
 			args: args{
 				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
@@ -169,9 +128,10 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host:     "host:587",
-						User:     "user",
-						Password: "password",
+						Host:         "host:587",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 7,
 					},
 				},
 			},
@@ -205,6 +165,7 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 						instance.NewSMTPConfigAddedEvent(
 							context.Background(),
 							&instance.NewAggregate("INSTANCE").Aggregate,
+							"configid",
 							true,
 							"from@domain.ch",
 							"name",
@@ -217,10 +178,12 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 								KeyID:      "id",
 								Crypted:    []byte("password"),
 							},
+							7,
 						),
 					),
 				),
-				alg: crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
+				idGenerator: id_mock.NewIDGeneratorExpectIDs(t, "configid"),
+				alg:         crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
 			},
 			args: args{
 				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
@@ -230,9 +193,10 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 					FromName:       "name",
 					ReplyToAddress: "replyto@domain.ch",
 					SMTP: smtp.SMTP{
-						Host:     "host:587",
-						User:     "user",
-						Password: "password",
+						Host:         "host:587",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 7,
 					},
 				},
 			},
@@ -245,7 +209,9 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 		{
 			name: "smtp config, port is missing",
 			fields: fields{
-				eventstore: eventstoreExpect(t),
+				eventstore:  eventstoreExpect(t),
+				idGenerator: id_mock.NewIDGeneratorExpectIDs(t, "configid"),
+				alg:         crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
 			},
 			args: args{
 				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
@@ -267,7 +233,9 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 		{
 			name: "smtp config, host is empty",
 			fields: fields{
-				eventstore: eventstoreExpect(t),
+				eventstore:  eventstoreExpect(t),
+				idGenerator: id_mock.NewIDGeneratorExpectIDs(t, "configid"),
+				alg:         crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
 			},
 			args: args{
 				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
@@ -276,9 +244,10 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host:     "   ",
-						User:     "user",
-						Password: "password",
+						Host:         "   ",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 1,
 					},
 				},
 			},
@@ -310,6 +279,7 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 						instance.NewSMTPConfigAddedEvent(
 							context.Background(),
 							&instance.NewAggregate("INSTANCE").Aggregate,
+							"configid",
 							true,
 							"from@domain.ch",
 							"name",
@@ -322,10 +292,12 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 								KeyID:      "id",
 								Crypted:    []byte("password"),
 							},
+							7,
 						),
 					),
 				),
-				alg: crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
+				alg:         crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
+				idGenerator: id_mock.NewIDGeneratorExpectIDs(t, "configid"),
 			},
 			args: args{
 				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
@@ -334,9 +306,10 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host:     "[2001:db8::1]:2525",
-						User:     "user",
-						Password: "password",
+						Host:         "[2001:db8::1]:2525",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 7,
 					},
 				},
 			},
@@ -351,9 +324,10 @@ func TestCommandSide_AddSMTPConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &Commands{
 				eventstore:     tt.fields.eventstore,
+				idGenerator:    tt.fields.idGenerator,
 				smtpEncryption: tt.fields.alg,
 			}
-			got, err := r.AddSMTPConfig(tt.args.ctx, tt.args.smtp)
+			_, got, err := r.AddSMTPConfig(tt.args.ctx, tt.args.instanceID, tt.args.smtp)
 			if tt.res.err == nil {
 				assert.NoError(t, err)
 			}
@@ -372,8 +346,10 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 		eventstore *eventstore.Eventstore
 	}
 	type args struct {
-		ctx  context.Context
-		smtp *smtp.Config
+		ctx        context.Context
+		instanceID string
+		id         string
+		smtp       *smtp.Config
 	}
 	type res struct {
 		want *domain.ObjectDetails
@@ -386,6 +362,21 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 		res    res
 	}{
 		{
+			name: "id empty, precondition error",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+				),
+			},
+			args: args{
+				ctx:  authz.WithInstanceID(context.Background(), "INSTANCE"),
+				smtp: &smtp.Config{},
+			},
+			res: res{
+				err: caos_errs.IsErrorInvalidArgument,
+			},
+		},
+		{
 			name: "empty config, invalid argument error",
 			fields: fields{
 				eventstore: eventstoreExpect(
@@ -395,6 +386,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 			args: args{
 				ctx:  authz.WithInstanceID(context.Background(), "INSTANCE"),
 				smtp: &smtp.Config{},
+				id:   "configID",
 			},
 			res: res{
 				err: caos_errs.IsErrorInvalidArgument,
@@ -415,10 +407,13 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host: "host:587",
-						User: "user",
+						Host:         "host:587",
+						User:         "user",
+						ProviderType: 1,
 					},
 				},
+				instanceID: "INSTANCE",
+				id:         "ID",
 			},
 			res: res{
 				err: caos_errs.IsNotFound,
@@ -447,6 +442,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 							instance.NewSMTPConfigAddedEvent(
 								context.Background(),
 								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
 								true,
 								"from@domain.ch",
 								"name",
@@ -454,20 +450,24 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 								"host:587",
 								"user",
 								&crypto.CryptoValue{},
+								7,
 							),
 						),
 					),
 				),
 			},
 			args: args{
-				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
+				ctx:        authz.WithInstanceID(context.Background(), "INSTANCE"),
+				instanceID: "INSTANCE",
+				id:         "ID",
 				smtp: &smtp.Config{
 					Tls:      true,
 					From:     "from@wrongdomain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host: "host:587",
-						User: "user",
+						Host:         "host:587",
+						User:         "user",
+						ProviderType: 7,
 					},
 				},
 			},
@@ -498,6 +498,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 							instance.NewSMTPConfigAddedEvent(
 								context.Background(),
 								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
 								true,
 								"from@domain.ch",
 								"name",
@@ -505,6 +506,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 								"host:587",
 								"user",
 								&crypto.CryptoValue{},
+								7,
 							),
 						),
 					),
@@ -517,10 +519,13 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host: "host:587",
-						User: "user",
+						Host:         "host:587",
+						User:         "user",
+						ProviderType: 7,
 					},
 				},
+				instanceID: "INSTANCE",
+				id:         "ID",
 			},
 			res: res{
 				err: caos_errs.IsPreconditionFailed,
@@ -549,6 +554,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 							instance.NewSMTPConfigAddedEvent(
 								context.Background(),
 								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
 								true,
 								"from@domain.ch",
 								"name",
@@ -556,18 +562,21 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 								"host:587",
 								"user",
 								&crypto.CryptoValue{},
+								1,
 							),
 						),
 					),
 					expectPush(
 						newSMTPConfigChangedEvent(
 							context.Background(),
+							"ID",
 							false,
 							"from2@domain.ch",
 							"name2",
 							"replyto@domain.ch",
 							"host2:587",
 							"user2",
+							7,
 						),
 					),
 				),
@@ -580,10 +589,13 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 					FromName:       "name2",
 					ReplyToAddress: "replyto@domain.ch",
 					SMTP: smtp.SMTP{
-						Host: "host2:587",
-						User: "user2",
+						Host:         "host2:587",
+						User:         "user2",
+						ProviderType: 7,
 					},
 				},
+				id:         "ID",
+				instanceID: "INSTANCE",
 			},
 			res: res{
 				want: &domain.ObjectDetails{
@@ -603,11 +615,14 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host:     "host",
-						User:     "user",
-						Password: "password",
+						Host:         "host",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 1,
 					},
 				},
+				instanceID: "INSTANCE",
+				id:         "ID",
 			},
 			res: res{
 				err: caos_errs.IsErrorInvalidArgument,
@@ -625,11 +640,14 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 					From:     "from@domain.ch",
 					FromName: "name",
 					SMTP: smtp.SMTP{
-						Host:     "   ",
-						User:     "user",
-						Password: "password",
+						Host:         "   ",
+						User:         "user",
+						Password:     "password",
+						ProviderType: 1,
 					},
 				},
+				instanceID: "INSTANCE",
+				id:         "ID",
 			},
 			res: res{
 				err: caos_errs.IsErrorInvalidArgument,
@@ -658,6 +676,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 							instance.NewSMTPConfigAddedEvent(
 								context.Background(),
 								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
 								true,
 								"from@domain.ch",
 								"name",
@@ -665,18 +684,21 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 								"host:587",
 								"user",
 								&crypto.CryptoValue{},
+								7,
 							),
 						),
 					),
 					expectPush(
 						newSMTPConfigChangedEvent(
 							context.Background(),
+							"ID",
 							false,
 							"from2@domain.ch",
 							"name2",
 							"replyto@domain.ch",
 							"[2001:db8::1]:2525",
 							"user2",
+							2,
 						),
 					),
 				),
@@ -689,10 +711,13 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 					FromName:       "name2",
 					ReplyToAddress: "replyto@domain.ch",
 					SMTP: smtp.SMTP{
-						Host: "[2001:db8::1]:2525",
-						User: "user2",
+						Host:         "[2001:db8::1]:2525",
+						User:         "user2",
+						ProviderType: 2,
 					},
 				},
+				instanceID: "INSTANCE",
+				id:         "ID",
 			},
 			res: res{
 				want: &domain.ObjectDetails{
@@ -706,7 +731,7 @@ func TestCommandSide_ChangeSMTPConfig(t *testing.T) {
 			r := &Commands{
 				eventstore: tt.fields.eventstore,
 			}
-			got, err := r.ChangeSMTPConfig(tt.args.ctx, tt.args.smtp)
+			got, err := r.ChangeSMTPConfig(tt.args.ctx, tt.args.instanceID, tt.args.id, tt.args.smtp)
 			if tt.res.err == nil {
 				assert.NoError(t, err)
 			}
@@ -726,8 +751,10 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 		alg        crypto.EncryptionAlgorithm
 	}
 	type args struct {
-		ctx      context.Context
-		password string
+		ctx        context.Context
+		instanceID string
+		id         string
+		password   string
 	}
 	type res struct {
 		want *domain.ObjectDetails
@@ -750,6 +777,7 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 			args: args{
 				ctx:      context.Background(),
 				password: "",
+				id:       "ID",
 			},
 			res: res{
 				err: caos_errs.IsNotFound,
@@ -765,6 +793,7 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 							instance.NewSMTPConfigAddedEvent(
 								context.Background(),
 								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
 								true,
 								"from",
 								"name",
@@ -772,6 +801,7 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 								"host:587",
 								"user",
 								&crypto.CryptoValue{},
+								7,
 							),
 						),
 					),
@@ -779,6 +809,7 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 						instance.NewSMTPConfigPasswordChangedEvent(
 							context.Background(),
 							&instance.NewAggregate("INSTANCE").Aggregate,
+							"ID",
 							&crypto.CryptoValue{
 								CryptoType: crypto.TypeEncryption,
 								Algorithm:  "enc",
@@ -791,8 +822,10 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 				alg: crypto.CreateMockEncryptionAlg(gomock.NewController(t)),
 			},
 			args: args{
-				ctx:      authz.WithInstanceID(context.Background(), "INSTANCE"),
-				password: "password",
+				ctx:        authz.WithInstanceID(context.Background(), "INSTANCE"),
+				password:   "password",
+				id:         "ID",
+				instanceID: "INSTANCE",
 			},
 			res: res{
 				want: &domain.ObjectDetails{
@@ -807,7 +840,246 @@ func TestCommandSide_ChangeSMTPConfigPassword(t *testing.T) {
 				eventstore:     tt.fields.eventstore,
 				smtpEncryption: tt.fields.alg,
 			}
-			got, err := r.ChangeSMTPConfigPassword(tt.args.ctx, tt.args.password)
+			got, err := r.ChangeSMTPConfigPassword(tt.args.ctx, tt.args.instanceID, tt.args.id, tt.args.password)
+			if tt.res.err == nil {
+				assert.NoError(t, err)
+			}
+			if tt.res.err != nil && !tt.res.err(err) {
+				t.Errorf("got wrong err: %v ", err)
+			}
+			if tt.res.err == nil {
+				assert.Equal(t, tt.res.want, got)
+			}
+		})
+	}
+}
+
+func TestCommandSide_ActivateSMTPConfig(t *testing.T) {
+	type fields struct {
+		eventstore *eventstore.Eventstore
+		alg        crypto.EncryptionAlgorithm
+	}
+	type args struct {
+		ctx         context.Context
+		instanceID  string
+		id          string
+		activatedId string
+	}
+	type res struct {
+		want *domain.ObjectDetails
+		err  func(error) bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		res    res
+	}{
+		{
+			name: "id empty, precondition error",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+				),
+			},
+			args: args{
+				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
+			},
+			res: res{
+				err: caos_errs.IsErrorInvalidArgument,
+			},
+		},
+		{
+			name: "smtp not existing, not found error",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+					expectFilter(),
+				),
+			},
+			args: args{
+				ctx:        context.Background(),
+				instanceID: "INSTANCE",
+				id:         "id",
+			},
+			res: res{
+				err: caos_errs.IsNotFound,
+			},
+		},
+		{
+			name: "activate smtp config, ok",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+					expectFilter(
+						eventFromEventPusher(
+							instance.NewSMTPConfigAddedEvent(
+								context.Background(),
+								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
+								true,
+								"from",
+								"name",
+								"",
+								"host:587",
+								"user",
+								&crypto.CryptoValue{},
+								7,
+							),
+						),
+					),
+					expectPush(
+						instance.NewSMTPConfigActivatedEvent(
+							context.Background(),
+							&instance.NewAggregate("INSTANCE").Aggregate,
+							"ID",
+						),
+					),
+				),
+			},
+			args: args{
+				ctx:         authz.WithInstanceID(context.Background(), "INSTANCE"),
+				id:          "ID",
+				instanceID:  "INSTANCE",
+				activatedId: "",
+			},
+			res: res{
+				want: &domain.ObjectDetails{
+					ResourceOwner: "INSTANCE",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Commands{
+				eventstore:     tt.fields.eventstore,
+				smtpEncryption: tt.fields.alg,
+			}
+			got, err := r.ActivateSMTPConfig(tt.args.ctx, tt.args.instanceID, tt.args.id, tt.args.activatedId)
+			if tt.res.err == nil {
+				assert.NoError(t, err)
+			}
+			if tt.res.err != nil && !tt.res.err(err) {
+				t.Errorf("got wrong err: %v ", err)
+			}
+			if tt.res.err == nil {
+				assert.Equal(t, tt.res.want, got)
+			}
+		})
+	}
+}
+
+func TestCommandSide_DeactivateSMTPConfig(t *testing.T) {
+	type fields struct {
+		eventstore *eventstore.Eventstore
+		alg        crypto.EncryptionAlgorithm
+	}
+	type args struct {
+		ctx         context.Context
+		instanceID  string
+		id          string
+		activatedId string
+	}
+	type res struct {
+		want *domain.ObjectDetails
+		err  func(error) bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		res    res
+	}{
+		{
+			name: "id empty, precondition error",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+				),
+			},
+			args: args{
+				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
+			},
+			res: res{
+				err: caos_errs.IsErrorInvalidArgument,
+			},
+		},
+		{
+			name: "smtp not existing, not found error",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+					expectFilter(),
+				),
+			},
+			args: args{
+				ctx:        context.Background(),
+				instanceID: "INSTANCE",
+				id:         "id",
+			},
+			res: res{
+				err: caos_errs.IsNotFound,
+			},
+		},
+		{
+			name: "deactivate smtp config, ok",
+			fields: fields{
+				eventstore: eventstoreExpect(
+					t,
+					expectFilter(
+						eventFromEventPusher(
+							instance.NewSMTPConfigAddedEvent(
+								context.Background(),
+								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
+								true,
+								"from",
+								"name",
+								"",
+								"host:587",
+								"user",
+								&crypto.CryptoValue{},
+								7,
+							),
+						),
+						eventFromEventPusher(
+							instance.NewSMTPConfigActivatedEvent(
+								context.Background(),
+								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
+							),
+						),
+					),
+					expectPush(
+						instance.NewSMTPConfigDeactivatedEvent(
+							context.Background(),
+							&instance.NewAggregate("INSTANCE").Aggregate,
+							"ID",
+						),
+					),
+				),
+			},
+			args: args{
+				ctx:         authz.WithInstanceID(context.Background(), "INSTANCE"),
+				id:          "ID",
+				instanceID:  "INSTANCE",
+				activatedId: "",
+			},
+			res: res{
+				want: &domain.ObjectDetails{
+					ResourceOwner: "INSTANCE",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Commands{
+				eventstore:     tt.fields.eventstore,
+				smtpEncryption: tt.fields.alg,
+			}
+			got, err := r.DeactivateSMTPConfig(tt.args.ctx, tt.args.instanceID, tt.args.id)
 			if tt.res.err == nil {
 				assert.NoError(t, err)
 			}
@@ -827,7 +1099,9 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 		alg        crypto.EncryptionAlgorithm
 	}
 	type args struct {
-		ctx context.Context
+		ctx        context.Context
+		instanceID string
+		id         string
 	}
 	type res struct {
 		want *domain.ObjectDetails
@@ -849,6 +1123,7 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 			},
 			args: args{
 				ctx: context.Background(),
+				id:  "ID",
 			},
 			res: res{
 				err: caos_errs.IsNotFound,
@@ -864,6 +1139,7 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 							instance.NewSMTPConfigAddedEvent(
 								context.Background(),
 								&instance.NewAggregate("INSTANCE").Aggregate,
+								"ID",
 								true,
 								"from",
 								"name",
@@ -871,6 +1147,7 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 								"host:587",
 								"user",
 								&crypto.CryptoValue{},
+								7,
 							),
 						),
 					),
@@ -878,12 +1155,15 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 						instance.NewSMTPConfigRemovedEvent(
 							context.Background(),
 							&instance.NewAggregate("INSTANCE").Aggregate,
+							"ID",
 						),
 					),
 				),
 			},
 			args: args{
-				ctx: authz.WithInstanceID(context.Background(), "INSTANCE"),
+				ctx:        authz.WithInstanceID(context.Background(), "INSTANCE"),
+				id:         "ID",
+				instanceID: "INSTANCE",
 			},
 			res: res{
 				want: &domain.ObjectDetails{
@@ -898,7 +1178,7 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 				eventstore:     tt.fields.eventstore,
 				smtpEncryption: tt.fields.alg,
 			}
-			got, err := r.RemoveSMTPConfig(tt.args.ctx)
+			got, err := r.RemoveSMTPConfig(tt.args.ctx, tt.args.instanceID, tt.args.id)
 			if tt.res.err == nil {
 				assert.NoError(t, err)
 			}
@@ -912,7 +1192,7 @@ func TestCommandSide_RemoveSMTPConfig(t *testing.T) {
 	}
 }
 
-func newSMTPConfigChangedEvent(ctx context.Context, tls bool, fromAddress, fromName, replyTo, host, user string) *instance.SMTPConfigChangedEvent {
+func newSMTPConfigChangedEvent(ctx context.Context, id string, tls bool, fromAddress, fromName, replyTo, host, user string, providerType uint32) *instance.SMTPConfigChangedEvent {
 	changes := []instance.SMTPConfigChanges{
 		instance.ChangeSMTPConfigTLS(tls),
 		instance.ChangeSMTPConfigFromAddress(fromAddress),
@@ -920,9 +1200,11 @@ func newSMTPConfigChangedEvent(ctx context.Context, tls bool, fromAddress, fromN
 		instance.ChangeSMTPConfigReplyToAddress(replyTo),
 		instance.ChangeSMTPConfigSMTPHost(host),
 		instance.ChangeSMTPConfigSMTPUser(user),
+		instance.ChangeSMTPConfigProviderType(providerType),
 	}
 	event, _ := instance.NewSMTPConfigChangeEvent(ctx,
 		&instance.NewAggregate("INSTANCE").Aggregate,
+		id,
 		changes,
 	)
 	return event

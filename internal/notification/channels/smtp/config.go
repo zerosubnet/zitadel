@@ -9,9 +9,10 @@ type Config struct {
 }
 
 type SMTP struct {
-	Host     string
-	User     string
-	Password string
+	Host         string
+	User         string
+	Password     string
+	ProviderType uint32
 }
 
 func (smtp *SMTP) HasAuth() bool {
